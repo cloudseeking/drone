@@ -164,15 +164,19 @@ steps:
     path: /drone/src/terraform_outputs
 
 - name: publicar-artefatos
-  image: plugins/download
+  image: drillster/drone-volume-cache
   depends_on: [save-access-info]
+  volumes:
+  - name: outputs
+    path: /drone/src/terraform_outputs
   settings:
-    path: terraform_outputs/
-    files:
-      - terraform_outputs/**/*
-
+    restore: false
+    mount:
+      - ./terraform_outputs
+    
 volumes:
 - name: ssh-keys
   temp: {}
 - name: outputs
-  temp: {}
+  host:
+    path: /tmp/drone-artifacts/${DRONE_REPO_NAME}/${DRONE_BUILD_NUMBER}
