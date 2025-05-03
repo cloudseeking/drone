@@ -11,7 +11,7 @@ trigger:
   - custom
 
 steps:
-- name: 📥 setup-environment
+- name: setup-environment
   image: debian:bullseye-slim
   commands:
   - apt-get update && apt-get install -y openssh-client git jq
@@ -36,7 +36,7 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: 📝 terraform-fmt
+- name: terraform-fmt
   image: hashicorp/terraform:latest
   depends_on: [setup-environment]
   commands:
@@ -47,7 +47,7 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: 📦 terraform-init
+- name: terraform-init
   image: hashicorp/terraform:latest
   depends_on: [terraform-fmt]
   commands:
@@ -68,7 +68,7 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: 🔍 terraform-validate
+- name: terraform-validate
   image: hashicorp/terraform:latest
   depends_on: [terraform-init]
   commands:
@@ -88,7 +88,7 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: 📝 terraform-plan
+- name: terraform-plan
   image: hashicorp/terraform:latest
   depends_on: [terraform-validate]
   commands:
@@ -109,7 +109,7 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: 🚀 terraform-apply
+- name: terraform-apply
   image: hashicorp/terraform:latest
   depends_on: [terraform-plan]
   commands:
@@ -132,7 +132,7 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: 🔑 save-access-info
+- name: save-access-info
   image: debian:bullseye-slim
   depends_on: [terraform-apply]
   commands:
