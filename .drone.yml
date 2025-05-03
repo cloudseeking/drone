@@ -1,11 +1,35 @@
 ---
 kind: pipeline
 type: kubernetes
-name: Terraform PR
+name: terraform-dispatcher
 
-# trigger:
-#   event:
-#   - pull_request
+trigger:
+  event:
+  - push
+  - pull_request
+  - tag
+  - custom
+
+steps:
+- name: dispatcher
+  image: alpine:latest
+  commands:
+  - echo "Dispatching workflows based on event: $${DRONE_BUILD_EVENT}, branch: $${DRONE_BRANCH}, commit: $${DRONE_COMMIT_SHA}"
+  - if [ "$${DRONE_BUILD_EVENT}" = "pull_request" ]; then echo "Dispatching to PR workflow"; fi
+  - if [ "$${DRONE_BUILD_EVENT}" = "push" ] && [ "$${DRONE_BRANCH}" = "main" ]; then echo "Dispatching to Apply workflow"; fi
+  - if [ "$${DRONE_BUILD_EVENT}" = "tag" ]; then echo "Dispatching to Release workflow"; fi
+
+---
+kind: pipeline
+type: kubernetes
+name: terraform-pr-checks
+
+trigger:
+  event:
+  - pull_request
+
+depends_on:
+- terraform-dispatcher
 
 steps:
 - name: setup-ssh
@@ -27,25 +51,60 @@ steps:
 - name: terraform-fmt
   image: hashicorp/terraform:latest
   depends_on: [setup-ssh]
-  settings:
-    actions:
-      - fmt
-    fmt_options:
-      write: false
-      diff: true
-      check: true
+  commands:
+  - cd /drone/src
+  - terraform fmt -check -diff -recursive
+  environment:
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
+- name: terraform-init
+  image: hashicorp/terraform:latest
+  depends_on: [terraform-fmt]
+  commands:
+  - cd /drone/src
+  - terraform init -input=false
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
+- name: terraform-validate
+  image: hashicorp/terraform:latest
+  depends_on: [terraform-init]
+  commands:
+  - cd /drone/src
+  - terraform validate
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
   volumes:
   - name: ssh-keys
     path: /root/.ssh
 
 - name: terraform-plan
   image: hashicorp/terraform:latest
-  depends_on: [terraform-fmt]
-  settings:
-    actions:
-      - init
-      - validate
-      - plan
+  depends_on: [terraform-validate]
+  commands:
+  - cd /drone/src
+  - terraform plan -input=false -out=tfplan
   environment:
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
@@ -67,13 +126,16 @@ volumes:
 ---
 kind: pipeline
 type: kubernetes
-name: Terraform Apply
+name: terraform-apply
 
 trigger:
   branch:
   - main
   event:
   - push
+
+depends_on:
+- terraform-dispatcher
   
 steps:
 - name: setup-ssh
@@ -92,14 +154,12 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: terraform-validate
+- name: terraform-init
   image: hashicorp/terraform:latest
   depends_on: [setup-ssh]
-  settings:
-    actions:
-      - init
-      - fmt
-      - validate
+  commands:
+  - cd /drone/src
+  - terraform init -input=false
   environment:
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
@@ -114,12 +174,31 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
+- name: terraform-validate
+  image: hashicorp/terraform:latest
+  depends_on: [terraform-init]
+  commands:
+  - cd /drone/src
+  - terraform validate
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
 - name: terraform-plan
   image: hashicorp/terraform:latest
   depends_on: [terraform-validate]
-  settings:
-    actions:
-      - plan
+  commands:
+  - cd /drone/src
+  - terraform plan -input=false -out=tfplan
   environment:
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
@@ -137,9 +216,9 @@ steps:
 - name: terraform-apply
   image: hashicorp/terraform:latest
   depends_on: [terraform-plan]
-  settings:
-    actions:
-      - apply
+  commands:
+  - cd /drone/src
+  - terraform apply -input=false tfplan
   environment:
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
@@ -150,6 +229,73 @@ steps:
     ARM_TENANT_ID:
       from_secret: ARM_TENANT_ID
     GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
+volumes:
+- name: ssh-keys
+  temp: {}
+
+---
+kind: pipeline
+type: kubernetes
+name: terraform-release
+
+trigger:
+  event:
+  - tag
+
+depends_on:
+- terraform-dispatcher
+
+steps:
+- name: setup-ssh
+  image: debian:bullseye-slim
+  commands:
+  - apt-get update && apt-get install -y openssh-client git
+  - mkdir -p /root/.ssh
+  - echo "$${SSH_KEY}" > /root/.ssh/id_rsa
+  - chmod 600 /root/.ssh/id_rsa
+  - ssh-keyscan -H github.com > /root/.ssh/known_hosts
+  - git config --global url."git@github.com:".insteadOf "https://github.com/"
+  environment:
+    SSH_KEY:
+      from_secret: SSH_KEY
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
+- name: terraform-init
+  image: hashicorp/terraform:latest
+  depends_on: [setup-ssh]
+  commands:
+  - cd /drone/src
+  - terraform init -input=false
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
+- name: create-release-notes
+  image: alpine:latest
+  depends_on: [terraform-init]
+  commands:
+  - apk add --no-cache curl jq
+  - echo "## Terraform Release $${DRONE_TAG}" > release-notes.md
+  - echo "Created on $(date)" >> release-notes.md
+  - echo "### Changes" >> release-notes.md
+  - echo "$(git log --pretty=format:'- %s' $(git describe --tags --abbrev=0 HEAD^)..HEAD)" >> release-notes.md
+  - cat release-notes.md
   volumes:
   - name: ssh-keys
     path: /root/.ssh
