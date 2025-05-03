@@ -30,35 +30,57 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: terraform
+- name: terraform-plan
   image: jmccann/drone-terraform:1
   depends_on: [setup-ssh]
   settings:
-    actions:
-      - init
-      - validate
-      - plan
-      - apply
     plan: true
     root_dir: .
     parallelism: 4
+    init_options: "-backend-config=path=/drone/src/terraform.tfstate"
     sensitive: true
-    vars:
-      ARM_CLIENT_ID:
-        from_secret: ARM_CLIENT_ID
-      ARM_CLIENT_SECRET:
-        from_secret: ARM_CLIENT_SECRET 
-      ARM_SUBSCRIPTION_ID:
-        from_secret: ARM_SUBSCRIPTION_ID
-      ARM_TENANT_ID:
-        from_secret: ARM_TENANT_ID
-    env:
-      GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
-      SSH_KEY:
-        from_secret: SSH_KEY
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+    SSH_KEY:
+      from_secret: SSH_KEY
   volumes:
   - name: ssh-keys
     path: /root/.ssh
+
+- name: terraform-apply
+  image: jmccann/drone-terraform:1
+  depends_on: [terraform-plan]
+  settings:
+    plan: false
+    root_dir: .
+    parallelism: 4
+    sensitive: true
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+    SSH_KEY:
+      from_secret: SSH_KEY
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+  when:
+    branch:
+    - main
 
 volumes:
 - name: ssh-keys
