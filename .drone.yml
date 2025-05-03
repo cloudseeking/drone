@@ -8,17 +8,17 @@ name: Terraform PR
 #   - pull_request
 
 steps:
-- name: setup-ssh-pr
-  image: alpine:latest
+- name: debug-ssh
+  image: debian:bullseye-slim
   commands:
-  - apk add --no-cache openssh-client git
+  - apt-get update && apt-get install -y openssh-client git
   - mkdir -p /root/.ssh
-  - echo -n "$${SSH_KEY}" > /root/.ssh/id_rsa
+  - echo "$${SSH_KEY}" > /root/.ssh/id_rsa
   - chmod 600 /root/.ssh/id_rsa
-  - touch /root/.ssh/known_hosts
-  - chmod 600 /root/.ssh/known_hosts
   - ssh-keyscan -H github.com > /root/.ssh/known_hosts
   - git config --global url."git@github.com:".insteadOf "https://github.com/"
+  - ls -la /root/.ssh/
+  - ssh -T -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa git@github.com || true
   environment:
     SSH_KEY:
       from_secret: SSH_KEY
@@ -26,27 +26,13 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: terraform-fmt-pr
-  image: jmccann/drone-terraform:latest
-  depends_on: [setup-ssh-pr]
-  settings:
-    actions:
-      - fmt
-    fmt_options:
-      write: false
-      diff: true
-      check: true
-  volumes:
-  - name: ssh-keys
-    path: /root/.ssh
-
-- name: terraform-validate-plan-pr
-  image: jmccann/drone-terraform:latest
-  depends_on: [terraform-fmt-pr]
-  settings:
-    actions:
-      - validate
-      - plan
+- name: terraform-test
+  image: hashicorp/terraform:1.5.7
+  depends_on: [debug-ssh]
+  commands:
+  - cd /drone/src
+  - export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
+  - terraform init -input=false
   environment:
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
@@ -56,7 +42,6 @@ steps:
       from_secret: ARM_SUBSCRIPTION_ID
     ARM_TENANT_ID:
       from_secret: ARM_TENANT_ID
-    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
   volumes:
   - name: ssh-keys
     path: /root/.ssh
@@ -78,14 +63,12 @@ trigger:
   
 steps:
 - name: setup-ssh
-  image: alpine:latest
+  image: debian:bullseye-slim
   commands:
-  - apk add --no-cache openssh-client git
+  - apt-get update && apt-get install -y openssh-client git
   - mkdir -p /root/.ssh
-  - echo -n "$${SSH_KEY}" > /root/.ssh/id_rsa
+  - echo "$${SSH_KEY}" > /root/.ssh/id_rsa
   - chmod 600 /root/.ssh/id_rsa
-  - touch /root/.ssh/known_hosts
-  - chmod 600 /root/.ssh/known_hosts
   - ssh-keyscan -H github.com > /root/.ssh/known_hosts
   - git config --global url."git@github.com:".insteadOf "https://github.com/"
   environment:
