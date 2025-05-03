@@ -27,7 +27,7 @@ steps:
     path: /root/.ssh
 
 - name: terraform-test
-  image: hashicorp/terraform:1.5.7
+  image: hashicorp/terraform:latest
   depends_on: [debug-ssh]
   commands:
   - cd /drone/src
