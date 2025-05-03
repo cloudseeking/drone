@@ -12,11 +12,28 @@ trigger:
       - pull_request   
 
 steps:
+- name: setup-ssh
+  image: alpine:latest
+  commands:
+  - apk add --no-cache openssh-client git
+  - mkdir -p ~/.ssh
+  - echo -n "$${SSH_KEY}" > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  - touch ~/.ssh/known_hosts
+  - chmod 600 ~/.ssh/known_hosts
+  - ssh-keyscan -H github.com > ~/.ssh/known_hosts
+  - git config --global url."git@github.com:".insteadOf "https://github.com/"
+  environment:
+    SSH_KEY:
+      from_secret: SSH_KEY
+
 - name: terraform-init
   image: hashicorp/terraform:1.5.7
+  depends_on: [setup-ssh]
   commands:
   - terraform init
   environment:
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
     ARM_CLIENT_SECRET:
@@ -28,6 +45,7 @@ steps:
 
 - name: terraform-validate
   image: hashicorp/terraform:1.5.7
+  depends_on: [terraform-init]
   commands:
   - terraform validate
   environment:
@@ -42,6 +60,7 @@ steps:
 
 - name: terraform-plan
   image: hashicorp/terraform:1.5.7
+  depends_on: [terraform-validate]
   commands:
   - terraform plan -out=tfplan
   environment:
@@ -56,6 +75,7 @@ steps:
 
 - name: terraform-apply
   image: hashicorp/terraform:1.5.7
+  depends_on: [terraform-plan]
   commands:
   - terraform apply -auto-approve tfplan
   environment:
