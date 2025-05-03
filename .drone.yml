@@ -8,7 +8,7 @@ name: Terraform PR
 #   - pull_request
 
 steps:
-- name: debug-ssh
+- name: setup-ssh
   image: debian:bullseye-slim
   commands:
   - apt-get update && apt-get install -y openssh-client git
@@ -17,8 +17,6 @@ steps:
   - chmod 600 /root/.ssh/id_rsa
   - ssh-keyscan -H github.com > /root/.ssh/known_hosts
   - git config --global url."git@github.com:".insteadOf "https://github.com/"
-  - ls -la /root/.ssh/
-  - ssh -T -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa git@github.com || true
   environment:
     SSH_KEY:
       from_secret: SSH_KEY
@@ -26,13 +24,28 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: terraform-test
-  image: hashicorp/terraform:latest
-  depends_on: [debug-ssh]
-  commands:
-  - cd /drone/src
-  - export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
-  - terraform init -input=false
+- name: terraform-fmt
+  image: jmccann/drone-terraform:latest
+  depends_on: [setup-ssh]
+  settings:
+    actions:
+      - fmt
+    fmt_options:
+      write: false
+      diff: true
+      check: true
+  volumes:
+  - name: ssh-keys
+    path: /root/.ssh
+
+- name: terraform-plan
+  image: jmccann/drone-terraform:latest
+  depends_on: [terraform-fmt]
+  settings:
+    actions:
+      - init
+      - validate
+      - plan
   environment:
     ARM_CLIENT_ID:
       from_secret: ARM_CLIENT_ID
@@ -42,6 +55,7 @@ steps:
       from_secret: ARM_SUBSCRIPTION_ID
     ARM_TENANT_ID:
       from_secret: ARM_TENANT_ID
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
   volumes:
   - name: ssh-keys
     path: /root/.ssh
@@ -78,26 +92,33 @@ steps:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: terraform-fmt
+- name: terraform-validate
   image: jmccann/drone-terraform:latest
   depends_on: [setup-ssh]
   settings:
     actions:
+      - init
       - fmt
-    fmt_options:
-      write: false
-      diff: true
-      check: true
+      - validate
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa"
   volumes:
   - name: ssh-keys
     path: /root/.ssh
 
-- name: terraform-validate-plan
+- name: terraform-plan
   image: jmccann/drone-terraform:latest
-  depends_on: [terraform-fmt]
+  depends_on: [terraform-validate]
   settings:
     actions:
-      - validate
       - plan
   environment:
     ARM_CLIENT_ID:
@@ -115,7 +136,7 @@ steps:
 
 - name: terraform-apply
   image: jmccann/drone-terraform:latest
-  depends_on: [terraform-validate-plan]
+  depends_on: [terraform-plan]
   settings:
     actions:
       - apply
