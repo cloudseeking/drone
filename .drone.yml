@@ -163,6 +163,14 @@ steps:
   - name: outputs
     path: /drone/src/terraform_outputs
 
+- name: publicar-artefatos
+  image: plugins/download
+  depends_on: [save-access-info]
+  settings:
+    path: terraform_outputs/
+    files:
+      - terraform_outputs/**/*
+
 volumes:
 - name: ssh-keys
   temp: {}
