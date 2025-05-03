@@ -3,9 +3,9 @@ kind: pipeline
 type: kubernetes
 name: Terraform PR
 
-trigger:
-  event:
-  - pull_request
+# trigger:
+#   event:
+#   - pull_request
 
 steps:
 - name: setup-ssh-pr
