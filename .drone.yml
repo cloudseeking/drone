@@ -25,7 +25,7 @@ steps:
     path: /root/.ssh
 
 - name: terraform-fmt
-  image: jmccann/drone-terraform:latest
+  image: hashicorp/terraform:latest
   depends_on: [setup-ssh]
   settings:
     actions:
@@ -39,7 +39,7 @@ steps:
     path: /root/.ssh
 
 - name: terraform-plan
-  image: jmccann/drone-terraform:latest
+  image: hashicorp/terraform:latest
   depends_on: [terraform-fmt]
   settings:
     actions:
@@ -93,7 +93,7 @@ steps:
     path: /root/.ssh
 
 - name: terraform-validate
-  image: jmccann/drone-terraform:latest
+  image: hashicorp/terraform:latest
   depends_on: [setup-ssh]
   settings:
     actions:
@@ -115,7 +115,7 @@ steps:
     path: /root/.ssh
 
 - name: terraform-plan
-  image: jmccann/drone-terraform:latest
+  image: hashicorp/terraform:latest
   depends_on: [terraform-validate]
   settings:
     actions:
@@ -135,7 +135,7 @@ steps:
     path: /root/.ssh
 
 - name: terraform-apply
-  image: jmccann/drone-terraform:latest
+  image: hashicorp/terraform:latest
   depends_on: [terraform-plan]
   settings:
     actions:
