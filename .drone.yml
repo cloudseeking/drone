@@ -12,36 +12,61 @@ trigger:
       - pull_request   
 
 steps:
+- name: terraform-init
+  image: hashicorp/terraform:1.5.7
+  commands:
+  - terraform init
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+
+- name: terraform-validate
+  image: hashicorp/terraform:1.5.7
+  commands:
+  - terraform validate
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+
 - name: terraform-plan
-  image: jmccann/drone-terraform:1
-  settings:
-    plan: true
-    root_dir: .
-    parallelism: 4
-    sensitive: true
-    vars:
-      ARM_CLIENT_ID:
-        from_secret: ARM_CLIENT_ID
-      ARM_CLIENT_SECRET:
-        from_secret: ARM_CLIENT_SECRET 
-      ARM_SUBSCRIPTION_ID:
-        from_secret: ARM_SUBSCRIPTION_ID
-      ARM_TENANT_ID:
-        from_secret: ARM_TENANT_ID
+  image: hashicorp/terraform:1.5.7
+  commands:
+  - terraform plan -out=tfplan
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
 
 - name: terraform-apply
-  image: jmccann/drone-terraform:1
-  settings:
-    plan: false
-    root_dir: .
-    parallelism: 4
-    sensitive: true
-    vars:
-      ARM_CLIENT_ID:
-        from_secret: ARM_CLIENT_ID
-      ARM_CLIENT_SECRET:
-        from_secret: ARM_CLIENT_SECRET 
-      ARM_SUBSCRIPTION_ID:
-        from_secret: ARM_SUBSCRIPTION_ID
-      ARM_TENANT_ID:
-        from_secret: ARM_TENANT_ID
+  image: hashicorp/terraform:1.5.7
+  commands:
+  - terraform apply -auto-approve tfplan
+  environment:
+    ARM_CLIENT_ID:
+      from_secret: ARM_CLIENT_ID
+    ARM_CLIENT_SECRET:
+      from_secret: ARM_CLIENT_SECRET 
+    ARM_SUBSCRIPTION_ID:
+      from_secret: ARM_SUBSCRIPTION_ID
+    ARM_TENANT_ID:
+      from_secret: ARM_TENANT_ID
+  when:
+    branch:
+    - main
