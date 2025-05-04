@@ -14,7 +14,7 @@ module "labels" {
 module "resource_group" {
   source              = "git@github.com:SQ-Sandbox/terraform-azurerm-rg-module.git?ref=main"
   location            = module.labels.location
-  resource_group_name = "${module.labels.resource_group_name}-001"
+  resource_group_name = upper("${module.labels.resource_group_name}-001")
   tags                = merge(local.tags, {})
 }
 
@@ -71,11 +71,13 @@ module "vm_sqctrl" {
   }
   # Credenciais
   admin_username = "adminuser"
+  admin_password = "Cloudseek@2025"
   admin_ssh_keys = [
     {
       public_key = tls_private_key.ssh.public_key_openssh
     }
   ]
+  disable_password_authentication = false
   # Rede
   subnet_id = module.virtual_network.subnet_ids[lower("${module.labels.private_subnet_name}-001")]
   # Opcional: escolher uma fonte de imagem

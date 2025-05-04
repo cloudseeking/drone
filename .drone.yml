@@ -163,20 +163,26 @@ steps:
   - name: outputs
     path: /drone/src/terraform_outputs
 
-- name: publicar-artefatos
-  image: drillster/drone-volume-cache
-  depends_on: [save-access-info]
-  volumes:
-  - name: outputs
-    path: /drone/src/terraform_outputs
-  settings:
-    restore: false
-    mount:
-      - ./terraform_outputs
-    
+# - name: publicar-artefatos
+#   image: athieriot/drone-artifactory
+#   depends_on: [save-access-info]
+#   settings:
+#     url:
+#       from_secret: ARTIFACTORY_URL
+#     username: 
+#       from_secret: ARTIFACTORY_USERNAME
+#     password:
+#       from_secret: ARTIFACTORY_PASSWORD
+#     group_id: com.cloudseek.infraestrutura
+#     artifact_id: terraform-proxmox
+#     version: 1.0-${DRONE_BUILD_NUMBER}
+#     repo_key: terraform-artifacts
+#     files:
+#       - terraform_outputs/**/*
+#     force_upload: true
+
 volumes:
 - name: ssh-keys
   temp: {}
 - name: outputs
-  host:
-    path: /tmp/drone-artifacts/${DRONE_REPO_NAME}/${DRONE_BUILD_NUMBER}
+  temp: {}
